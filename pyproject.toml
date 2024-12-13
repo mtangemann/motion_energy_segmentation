@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "motion_energy_segmentation"
+description = 'Code for the NeurIPS 2024 paper "Object segmentation from common fate: Motion energy processing enables human-like zero-shot generalization to random dot stimuli"'
+authors = [
+    { name = "Matthias Tangemann", email = "matthias.tangemann@bethgelab.org" },
+]
+readme = "README.md"
+version = "0.0.0"
+requires-python = ">=3.7"
+dependencies = [
+    "click~=8.1",
+    "coloredlogs~=15.0",
+    "executor~=23.2",
+    "matplotlib~=3.9",
+    "mmflow @ git+https://github.com/open-mmlab/mmflow.git@v0.5.2",
+    "numpy~=1.26",
+    "pandas~=2.2",
+    "python-benedict~=0.33.2",
+    "Pillow~=10.4",
+    "pycocotools~=2.0",
+    "torch~=2.3",
+    "torcheval==0.0.7",
+    "torchvision~=0.18.1",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "ruff~=0.5.2",
+]
+
+
+[tool.ruff]
+lint.select = ["B", "E", "F", "FIX", "I", "T20"]
+exclude = ["_extern"]
+
+
+[tool.setuptools]
+packages = ["motion_energy_segmentation"]

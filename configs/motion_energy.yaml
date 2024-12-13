@@ -1,0 +1,77 @@
+seed: 0
+
+data:
+  train:
+    _type: ClipLoader
+    dataset:
+      _type: StandardVideoDataset
+      path: data/single_moving_object
+      subset: train
+      features: [rgb, segmentation]
+    clip_length: 9
+    batch_size: 8
+    num_workers: 8
+    shuffle: True
+    repeat: True
+
+  val:
+    _type: ClipLoader
+    dataset:
+      _type: StandardVideoDataset
+      path: data/single_moving_object
+      subset: val
+      features: [rgb, segmentation]
+    clip_length: 9
+    batch_size: 8
+    num_workers: 8
+    shuffle: True
+    repeat: False
+
+copy_datasets_to_scratch: True
+
+
+model:
+  levels: [0, 1, 2, 3, 4]
+  motion_estimator:
+    _type: SimoncelliHeegerCNN
+    from_original_model: True
+    freeze_original_model: True
+    padding_time: valid
+  segmenter:
+    in_channels: 19
+    channels: 16
+    out_channels: 1
+    input_cnn:
+      depth: 1
+      kernel_size: 5
+      dilation: 1
+      normalization: InstanceNorm
+      final_normalization: True
+      activation: CELU
+      final_activation: True
+    refine_cnn:
+      depth: 4
+      kernel_size: [4, 1, 2, 2]
+      dilation: [3, 5, 3, 5]
+      normalization: InstanceNorm
+      final_normalization: True
+      activation: CELU
+      final_activation: True
+    output_cnn:
+      depth: 1
+      kernel_size: 1
+      final_normalization: False
+      final_activation: False
+
+
+max_steps: 40000
+
+optimizer:
+  lr: 0.0001
+
+log_every: 25
+evaluate_every: 5000
+evaluate_at: [1000, 2500]
+visualize_every: 1000
+visualize_at: [1, 50, 100, 250, 500, 750]
+checkpoint_every: 1000

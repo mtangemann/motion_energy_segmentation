@@ -1,0 +1,59 @@
+dataset:
+  train:
+    type: "EasyStream"
+    number_of_samples: 20
+    min_number_of_informative_dots: 900
+    min_motion_difference: 0.1
+    proposal_stream:
+      type: "IndependentUniformStream"
+      seed: 4
+      size: [30, 256, 256]
+      duration: 1
+      background_max_speed: 0.25
+      foreground_max_speed: 0.25
+      min_scale: 0.4
+      max_scale: 1.0
+      min_random_dot_density: 16.0
+      max_random_dot_density: 512.0
+      min_random_dot_lifetime: 1.0
+      max_random_dot_lifetime: 2.0
+
+  test:
+    type: "UniformNumberOfInformativeDotsStream"
+    number_of_samples: 500
+    min_number_of_informative_dots: 0
+    max_number_of_informative_dots: 1800
+    estimation_samples: 5000
+
+    proposal_stream:
+      type: "IndependentUniformStream"
+      seed: 6
+      size: [30, 256, 256]
+      duration: 1
+      background_max_speed: 0.25
+      foreground_max_speed: 0.25
+      min_scale: 0.4
+      max_scale: 1.0
+      min_random_dot_density: 16.0
+      max_random_dot_density: 512.0
+      min_random_dot_lifetime: 1.0
+      max_random_dot_lifetime: 2.0
+
+  catch:
+    type: "EasyStream"
+    number_of_samples: 20
+    min_number_of_informative_dots: 900
+    min_motion_difference: 0.1
+    proposal_stream:
+      type: "IndependentUniformStream"
+      seed: 7
+      size: [30, 256, 256]
+      duration: 1
+      background_max_speed: 0.25
+      foreground_max_speed: 0.25
+      min_scale: 0.4
+      max_scale: 1.0
+      min_random_dot_density: 16.0
+      max_random_dot_density: 512.0
+      min_random_dot_lifetime: 1.0
+      max_random_dot_lifetime: 2.0

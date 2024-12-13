@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Random Dot Shape Identification</title>
+<script src="jspsych-7.3.4/jspsych.js"></script>
+<script src="jspsych-7.3.4/plugin-browser-check.js"></script>
+<script src="jspsych-7.3.4/plugin-call-function.js"></script>
+<script src="jspsych-7.3.4/plugin-html-button-response.js"></script>
+<script src="jspsych-7.3.4/plugin-html-keyboard-response.js"></script>
+<script src="jspsych-7.3.4/plugin-survey-text.js"></script>
+<script src="jspsych-7.3.4/plugin-video-button-response.js"></script>
+<script src="jspsych-7.3.4/plugin-preload.js"></script>
+<script src="plugin-random-dot-shape-identification-response.js"></script>
+<link href="jspsych-7.3.4/jspsych.css" rel="stylesheet" type="text/css" />
+</head>
+<body></body>
+<script>
+
+/**
+* Logs a message to the console and sends it to the server.
+*
+* @param {string} level   - The severity level of the message. Can be "debug", "info",
+*                           "warning", "error", or "critical".
+* @param {string} message - The message to log.
+* @param {Object} data    - Additional data to log (optional).
+*/
+function log(level, message, data = {}) {
+    if (level === "error" || level === "critical") {
+        console.error(message, data);
+    } else if (level === "warning") {
+        console.warn(message, data);
+    } else if (level === "info") {
+        console.info(message, data);
+    } else if (level === "debug") {
+        console.debug(message, data);
+    } else {
+        console.log(message, data);
+    }
+    
+    // JSON.stringify does not handle Error objects correctly. Therefore, we extract
+    // the relevant information manually.
+    for (var key in data) {
+        if (data[key] instanceof Error) {
+            data[key] = {
+                name: data[key].name,
+                message: data[key].message,
+                stack: data[key].stack
+            };
+        }
+    }
+    
+    fetch("log", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({level: level, message: message, ...data})
+    });
+}
+
+
+/**
+ * Returns the configuration parameters from the URL.
+ */
+function getConfigFromURL() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var config = {};
+    
+    for (var [key, value] of urlParams) {
+        if (value === "null") {
+            config[key] = null;
+        } else if (value === "true") {
+            config[key] = true;
+        } else if (value === "false") {
+            config[key] = false;
+        } else if (!isNaN(value)) {
+            config[key] = parseInt(value);
+        } else {
+            config[key] = value;
+        }
+    }
+
+    return config;
+}
+
+
+/**
+ * Returns a timeline with the instructions and training trials.
+ */
+function createTrainingTrials(variables) {
+    config.train_successful = false;
+    config.train_repeats = 1;
+
+    var instructions = {
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: `
+            <h1>Instructions</h1>
+            <p>In this study you will see video clips of moving dots that form a shape,
+                similar to the following:</p>
+            <video width="256" height="256" autoplay loop>
+                <source src="example.mp4" type="video/mp4">
+            </video>
+            <p>After the video finished playing, you will see two different shapes. For
+                example:</p>
+            <p>
+                <img src="example_choice_0.png" width="256" height="256">
+                <img src="example_choice_1.png" width="256" height="256">
+            </p>
+            <p>Your task is to identify the shape that was shown in the video clip.
+                Please press 'F' for the left shape and 'J' for the right shape. If you
+                are not sure, please make your best guess.</p>
+            <p>In each trial, you will have 3s to make a response. If you do not respond
+                within 3s, the experiment will automatically advance to the next trial.
+            </p>
+            <p>Press 'SPACE' to begin with some examples.</p>
+        `,
+        choices: [' '],
+    };
+
+    variables.train = jsPsych.randomization.shuffle(variables.train);
+    var trials = [];
+
+    for (var i = 0; i < variables.train.length; i++) {
+        var trial = {
+            type: jsPsychRandomDotShapeIdentificationResponse,
+            stimulus: variables.train[i].stimulus,
+            choices: variables.train[i].choices,
+            keys: ['f', 'j'],
+            margin_vertical: '32px',
+            margin_horizontal: '16px',
+            width: 256,
+            height: 256,
+            fixation_cross_duration: 1000,
+            autoplay: true,
+            response_allowed_while_playing: false,
+            response_ends_trial: true,
+            prompt: "Which shape do you see? Press 'F' for the left shape and 'J' for the right shape.",
+            show_number_of_informative_dots: config.show_number_of_informative_dots,
+            show_trial_number: config.show_trial_number,
+            data: {
+                number_of_informative_dots: variables.train[i].number_of_informative_dots,
+                correct_response: variables.train[i].correct_response,
+                stage: "train",
+                trial_index_in_stage: i,
+                training: true,
+            },
+            on_finish: uploadDataAfterTrial,
+        };
+        trials.push(trial);
+    }
+
+    var preload = {
+        type: jsPsychPreload,
+        trials: trials,        
+        message: "Loading...",
+        error_message: "The experiment failed to load. Please refresh the page to try again.",
+    };
+
+    var evaluate_training = {
+        type: jsPsychCallFunction,
+        func: function() {
+            var trials = jsPsych.data.get().filter({stage: "train"}).last(variables.train.length);
+            var total_trials = trials.count();
+            var correct_trials = trials.filterCustom(
+                (trial) => trial.response === trial.correct_response
+            ).count();
+            var accuracy = correct_trials / total_trials;
+
+            config.train_total_trials = total_trials;
+            config.train_correct_trials = correct_trials;
+            config.train_accuracy = accuracy;
+            config.train_successful = accuracy >= 0.75;
+        },
+    }
+
+    var training_succesful = {
+        timeline: [{
+            type: jsPsychHtmlKeyboardResponse,
+            stimulus: function() {
+                text = `
+                    <h1>Training Complete</h1>
+                    <p>You have identified the correct shape for ${config.train_correct_trials} /
+                        ${config.train_total_trials} videos (${(config.train_accuracy * 100).toFixed(1)}%).</p>
+                    <p>Press 'SPACE' to continue with the test phase.</p>
+                `;
+                return text;
+            },
+            choices: [' '],
+        }],
+        conditional_function: function() {
+            return config.train_successful;
+        },
+    }
+
+    var training_needs_repeat = {
+        timeline: [{
+            type: jsPsychHtmlKeyboardResponse,
+            stimulus: function() {
+                text = `
+                    <h1>Training Complete</h1>
+                    <p>You have identified the correct shape for ${config.train_correct_trials} /
+                        ${config.train_total_trials} videos (${(config.train_accuracy * 100).toFixed(1)}%).</p>
+                    <p>For this study, we require an accuracy of at least 75% in the training phase to ensure that the task is working correctly.</p>
+                    <p>Please press 'SPACE' to repeat the training phase.</p>
+                `;
+                return text;
+            },
+            choices: [' '],
+        }],
+        conditional_function: function() {
+            return !config.train_successful && config.train_repeats < 2;
+        },
+    };
+
+    var training_failed = {
+        timeline: [{
+            type: jsPsychSurveyText,
+            preamble: `
+                <h1>Training Failed</h1>
+                <p>Unfortunately, your accuracy was below 75% in the training phase. Therefore, we cannot continue with the experiment.</p>
+            `,
+            questions: [
+                {
+                    prompt: "Do you have any comments or feedback (optional)?",
+                    rows: 5,
+                    columns: 50,
+                    required: false,
+                }
+            ],
+        }, {
+            type: jsPsychHtmlKeyboardResponse,
+            stimulus: `
+                <h1>Training Failed</h1>
+                <p>Unfortunately, your accuracy was below 75% in the training phase. Therefore, we cannot continue with the experiment.</p>
+            `,
+            choices: "NO_KEYS",
+            on_finish: function() {
+                jsPsych.endExperiment();
+            }
+        }],
+        conditional_function: function() {
+            return !config.train_successful && config.train_repeats >= 2;
+        },
+    };
+
+    training_complete = { timeline: [evaluate_training, training_succesful, training_needs_repeat, training_failed] };
+
+    var training_loop = {
+        timeline: [instructions, { timeline: trials }, training_complete],
+        loop_function: function() {
+            if (config.train_successful) {
+                return false;
+            } else {
+                config.train_repeats++;
+                return true;
+            }
+        }
+    }
+
+    return { timeline: [preload, training_loop] }
+}
+
+
+/**
+ * Returns a timeline with the test trials.
+ */
+function createTestTrials(variables) {
+    var trials_per_block = 20;
+    var timeline_block = [];
+    var timeline = [];
+
+    var configs_test = variables.test.map((config) => {
+        return {
+            ...config,
+            subset: "test"
+        };
+    });
+    var configs_catch = variables.catch.map((config) => {
+        return {
+            ...config,
+            subset: "catch"
+        };
+    });
+    var configs = configs_test.concat(configs_catch);
+
+    configs = jsPsych.randomization.shuffle(configs);
+
+    for (var i = 0; i < configs.length; i++) {
+        configs[i].trial_index_in_stage = i;
+
+        // In the conditional function, the current trial is not yet available.
+        // Therefore, we include a noop trial that holds the trial information before
+        // the actual trial.
+        var trial_info = {
+            type: jsPsychCallFunction,
+            func: function() {
+                return;
+            },
+            data: {
+                stage: "test",
+                trial_index_in_stage: i,
+                subset: configs[i].subset,
+            }
+        };
+
+        var trial = {
+            type: jsPsychRandomDotShapeIdentificationResponse,
+            stimulus: configs[i].stimulus,
+            choices: configs[i].choices,
+            keys: ['f', 'j'],
+            margin_vertical: '32px',
+            margin_horizontal: '16px',
+            width: 256,
+            height: 256,
+            fixation_cross_duration: 1000,
+            autoplay: true,
+            response_window: config.response_window,
+            response_allowed_while_playing: false,
+            response_ends_trial: true,
+            show_number_of_informative_dots: config.show_number_of_informative_dots,
+            show_trial_number: config.show_trial_number,
+            data: {
+                number_of_informative_dots: configs[i].number_of_informative_dots,
+                correct_response: configs[i].correct_response,
+                trial_index_in_stage: configs[i].trial_index_in_stage,
+                stage: "test",
+                training: false,
+                subset: configs[i].subset,
+            },
+            on_finish: uploadDataAfterTrial
+        };
+
+        var trial_with_progress_check = {
+            timeline: [trial],
+            conditional_function: function() {
+                if (config.progress.stage === "end") {
+                    return false;
+                }
+
+                var trial_info = jsPsych.getCurrentTrial();
+                var current_stage = trial_info.data.stage;
+                var current_index = trial_info.data.trial_index_in_stage;
+
+                if (config.progress.stage == current_stage && config.progress.trial_index >= current_index) {
+                    return false;
+                }
+
+                return true;
+            }
+        };
+
+        timeline_block.push({ timeline: [trial_info, trial_with_progress_check] });
+
+        if (i % trials_per_block == trials_per_block - 1) {
+            var trials_done = i + 1;
+            timeline_block.push({
+                type: jsPsychHtmlKeyboardResponse,
+                stimulus: `
+                <p>You have completed ${trials_done} / ${configs.length} trials.</p>
+                <p>Feel free to take a short break.</p>
+                <p>Press 'SPACE' to continue.</p>
+                `,
+                choices: [' '],
+            });
+
+            var timeline_block_copy = timeline_block.slice();
+
+            var preload = {
+                type: jsPsychPreload,
+                trials: timeline_block_copy,
+                message: "Loading...",
+                error_message: "The experiment failed to load. Please refresh the page to try again.",
+            };
+
+            timeline.push(preload);
+            timeline.push({ timeline: timeline_block_copy });
+            timeline_block = [];
+        }
+
+        if (i == configs.length - 1) {
+            timeline_block_copy = timeline_block.slice();
+
+            var preload = {
+                type: jsPsychPreload,
+                trials: timeline_block_copy,
+                message: "Loading...",
+                error_message: "The experiment failed to load. Please refresh the page to try again.",
+            };
+
+            timeline.push(preload);
+            timeline.push({ timeline: timeline_block_copy });
+        }
+    }
+
+    return { timeline: timeline };
+}
+
+
+/**
+ * Uploads the data of the last trial to the server.
+ * 
+ * This uses the global `jsPsych` object to access the data.
+ */
+function uploadDataAfterTrial() {
+    trial = jsPsych.data.get().last(1).values()[0];
+
+    fetch("results", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify([trial])  // IDEA Send trial instead of [trial]
+    })
+    .then((response) => {
+        if (response.ok) {
+            console.log("Trial data saved successfully.");
+        } else {
+            console.log("Could not save trial data.", response);
+        }
+    })
+    .catch((error) => {
+        log("error", "Could not save trial data.", {subject_id: config.subject_id, error: error});
+    });
+}
+
+
+/**
+ * Uploads the data of all trials to the server.
+ * 
+ * This uses the global `jsPsych` object to access the data.
+ */
+function uploadDataAfterExperiment(done) {
+    fetch("results", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(jsPsych.data.get().values())
+    })
+    .then((response) => response.json())
+    .then((response) => {
+        console.log("Final data saved successfully.");
+        config.prolific_return_url = response.prolific_return_url;
+        done();
+    })
+    .catch((error) => {
+        log("error", "Could not save final data.", {subject_id: config.subject_id, error: error});
+    });
+}
+
+
+var jsPsych = initJsPsych({});
+
+var config = {
+    show_number_of_informative_dots: false,
+    show_trial_number: false,
+    response_window: 3000,
+    is_prolific: false,
+};
+
+config = {...config, ...getConfigFromURL()};
+
+if (config.PROLIFIC_PID !== undefined) {
+    config.is_prolific = true;
+    config.subject_id = config.PROLIFIC_PID;
+
+    jsPsych.data.addProperties({
+        prolific_participant_id: config.PROLIFIC_PID,
+        prolific_session_id: config.SESSION_ID,
+        prolific_study_id: config.STUDY_ID,
+    });
+}
+
+if (config.subject_id === undefined) {
+    config.subject_id = jsPsych.randomization.randomID(8);
+
+    // Add the subject ID to the URL to allow for reloading the page.
+    var url = new URL(window.location.href);
+    url.searchParams.append("subject_id", config.subject_id);
+    window.history.replaceState({}, "", url);
+}
+
+jsPsych.data.addProperties({subject_id: config.subject_id});
+jsPsych.randomization.setSeed(config.subject_id);
+
+
+var load_progress = {
+    type: jsPsychCallFunction,
+    func: function() {
+        return fetch(`progress/${config.subject_id}`)
+            .then(response => response.json())
+            .then(data => {
+                config.progress = data; 
+                jsPsych.data.addProperties({ session: data.session + 1 });
+            })
+            .catch(error => {
+                log("error", "Could not load progress.", {subject_id: config.subject_id, error: error});
+                config.progress = {};
+            });
+    }
+}
+
+var broswer_check = {
+    type: jsPsychBrowserCheck,
+    on_finish: uploadDataAfterTrial,
+};
+
+var welcome = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        var text = '<p>Welcome to the experiment.</p>';
+
+        if (config.progress.stage === "end") {
+            text += `
+            <p>You have already completed the experiment.</p>
+            <p>You can now close this window.</p>
+            `;
+            return text;
+        }
+
+        if (config.progress.stage === "test") {
+            text += `
+                <p>You have already completed some trials. We will repeat the
+                    introduction to ensure that the setup is still working. Afterwards,
+                    the experiment will continue with the remaining trials.</p>
+                </p>
+            `;
+        }
+
+        text += `
+            <p>Press 'SPACE' to begin with the introduction.</p>
+        `;
+
+        return text;
+    },
+    choices: [' '],
+};
+
+var upload_data = {
+    type: jsPsychCallFunction,
+    func: uploadDataAfterExperiment,
+    async: true,
+}
+
+var feedback = {
+    type: jsPsychSurveyText,
+    preamble: function() {
+        var trials = jsPsych.data.get().filter({training: false});
+        
+        var total_trials = trials.count();
+        var correct_trials = trials.filterCustom(
+        (trial) => trial.response === trial.correct_response
+        ).count();
+        
+        var accuracy = correct_trials / total_trials;
+        
+        return `
+            <h1>Experiment complete</h1>
+            <p>Thank you for participating in this experiment.</p>
+            <p>You have identified the correct shape for ${correct_trials} /
+                ${total_trials} videos (${(accuracy * 100).toFixed(1)}%).</p>
+        `;
+    },
+    questions: [
+        {
+            "prompt": "Do you have any comments or feedback (optional)?",
+            "rows": 5,
+            "columns": 50,
+            "required": false,
+        }
+    ],
+};
+
+var finish = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        text = "<p>Thank you for participating in this experiment.</p>";
+        if (config.is_prolific) {
+            text += `
+                <p><a href="${config.prolific_return_url}" target="_blank">Return to Prolific</a></p>
+            `;
+        } else {
+            text += `
+                <p>You can now close this window.</p>
+            `;
+        }
+        return text;
+    },
+    
+    choices: "NO_KEYS",
+};
+
+Promise.all([
+    fetch("trials.json").then(response => response.json()),
+    fetch(`progress/${config.subject_id}`).then(response => response.json()),
+]).then(([variables, progress]) => {
+    var training_trials = createTrainingTrials(variables);
+    var test_trials = createTestTrials(variables);
+
+    var timeline = [
+        load_progress,
+        broswer_check,
+        welcome,
+        training_trials,
+        test_trials,
+        feedback,
+        upload_data,
+        finish,
+    ];
+
+    jsPsych.run(timeline);
+}).catch((error) => {
+    log("error", "Could not load trials.", {subject_id: config.subject_id, error: error});
+});
+
+</script>
+</html>
