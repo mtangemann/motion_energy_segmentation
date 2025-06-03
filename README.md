@@ -85,8 +85,12 @@ python -m motion_energy_segmentation.evaluate_shape_identification \
 ```
 
 
-## Datasets and models
-Precomputed datasets and pretrained models are coming soon.
+## Datasets and pretrained model
+The datasets and model weights are available from Huggingface:
+
+- [Model weights](https://huggingface.co/bethgelab/motion_energy_segmentation_model/resolve/main/motion_energy_segmentation_model.pth?download=true)
+- [Single Moving Object dataset](https://huggingface.co/datasets/bethgelab/motion_energy_segmentation_datasets/resolve/main/single_moving_object_dataset.zip?download=true)
+- Human subject study: [stimuli](https://huggingface.co/datasets/bethgelab/motion_energy_segmentation_datasets/resolve/main/human_subject_study_stimuli.zip?download=true), [responses](https://huggingface.co/datasets/bethgelab/motion_energy_segmentation_datasets/resolve/main/human_subject_study_responses.csv?download=true)
 
 
 ## External code
